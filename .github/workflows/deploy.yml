@@ -23,5 +23,6 @@ jobs:
             npm install
             npm run build
             mkdir -p dist/swagger && cp -r src/swagger/* dist/swagger/
+            sed -i 's/^NODE_ENV=.*/NODE_ENV=production/' .env
             pm2 restart vow-backend --update-env
             echo "Deployment Successful!"

@@ -234,11 +234,8 @@ const verifyResetOtp = async (req: Request<{}, {}, { email: string; otp: string 
     const payload = { user : user?._id as string, ts: Date.now()};
     const resetToken = jwt.sign(payload, secret, { expiresIn: `${JWT_EXPIRY_SECONDS}s` });
 
-    const secureFlag = process.env.NODE_ENV === "production";
     res.cookie("resetToken", resetToken, {
-      httpOnly: true,
-      secure: secureFlag,
-      sameSite: "lax",
+      ...options,
       maxAge: JWT_EXPIRY_SECONDS * 1000,
     });
 
