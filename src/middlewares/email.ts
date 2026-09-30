@@ -7,31 +7,31 @@ import cron from "node-cron";
 export const sendVerificationCode = async (email: string, verificationCode: string): Promise<void> => {
   try {
     const response = await transporter.sendMail({
-    from: '"OTP Verification" <process.env.EMAIL>',
+      from: `"VOW Verification" <${process.env.EMAIL}>`,
       to: email,
-      subject: "Verify your Email",
-      text: "Verify Your Email",
+      subject: "Verify your Email - VOW",
+      text: `Your VOW verification code is: ${verificationCode}`,
       html: getVerificationEmailTemplate(verificationCode),
     });
     console.log("Email sent successfully", response);
   } catch (error) {
-    console.error("Email error", error);
+    console.error("Email error:", error);
+    throw error;
   }
 };
 
-//welcome email
 export const welcomeEmail = async (email: string, username: string): Promise<void> => {
   try {
     const response = await transporter.sendMail({
-      from: '"VOW APP" <process.env.EMAIL>',
+      from: `"VOW App" <${process.env.EMAIL}>`,
       to: email,
-      subject: "Welcome!",
-      text: "Welcome Message",
+      subject: "Welcome to VOW!",
+      text: `Welcome to VOW, ${username}!`,
       html: getWelcomeEmailTemplate(username),
     });
     console.log("Welcome email sent successfully", response);
   } catch (error) {
-    console.error("Email error", error);
+    console.error("Welcome email error:", error);
   }
 };
 
