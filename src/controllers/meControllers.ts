@@ -27,20 +27,14 @@ const sanitizeUser = (userDoc: IUser) => {
 
     const { fullName, organisation, gender, dob } = req.body;
 
-    const avatarFolders: Record<string, string[]> = {
-      male: ["Boy05.png", "Boy06.png", "Boy13.png", "Boy14.png", "Boy18.png", "Boy19.png", "Boy20.png","Boy02.png"],
-      female: ["Girl08.png", "Girl01.png", "Girl11.png", "Girl19.png", "Girl18.png", "Girl04.png", "Girl06.png", "Girl14.png", "Girl03.png"],
-      other: ["avatar1.png", "avatar2.png", "avatar3.png", "avatar4.png", "avatar5.png"],
+    const defaultAvatars: Record<string, string> = {
+      male: "/avatars/male/avatar1.png",
+      female: "/avatars/female/avatar1.png",
+      other: "/avatars/other/avatar1.png",
     };
 
     const genderKey = gender?.toLowerCase() || "other";
-    const fileList = avatarFolders[genderKey] || avatarFolders.other;
-
-
-    const index = Array.from(userId.toString())
-      .reduce((sum, c) => sum + c.charCodeAt(0), 0) % fileList.length;
-
-    const avatarUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${genderKey}/${fileList[index]}`;
+    const avatarUrl = defaultAvatars[genderKey] || defaultAvatars.other;
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
