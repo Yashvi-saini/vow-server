@@ -12,10 +12,10 @@ info:
     - 🔴 **Member only** – cannot delete files.
 
 servers:
-  - url: https://vow-org.me
-    description: AWS development server
+  - url: https://vow-api.duckdns.org
+    description: Production AWS server
   - url: http://localhost:5000
-    description: AWS development server
+    description: Local development server
 
 
 tags:

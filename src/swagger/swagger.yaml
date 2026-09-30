@@ -4,10 +4,10 @@ info:
   version: "1.0.0"
   description: Authentication endpoints + file upload, download, delete using Cloudinary. Metadata stored in MongoDB.
 servers:
-  - url: https://vow-org.me
-    description: AWS development server
+  - url: https://vow-api.duckdns.org
+    description: Production AWS server
   - url: http://localhost:5000
-    description: AWS development server
+    description: Local development server
 
 tags:
   - name: Auth
