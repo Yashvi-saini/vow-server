@@ -179,8 +179,17 @@ const login = async (req: Request<{}, {}, { identifier: string; password: string
   const { accessToken, refreshToken } = user.generateTokens();
   user.refreshToken = refreshToken;
   await user.save();
-console.log("for debugging");
-  return res.status(200).cookie("accessToken", accessToken, options).cookie("refreshToken", refreshToken, options).json({ success: true, msg: "new login successful", user: sanitizeUser(user) });
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json({
+      success: true,
+      msg: "new login successful",
+      accessToken,
+      refreshToken,
+      user: sanitizeUser(user),
+    });
 };
 
 // FORGOT PASSWORD
@@ -362,8 +371,13 @@ const refreshAccessToken = async (req: Request, res: Response) => {
 
     return res
       .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", newRefreshToken,options)
-      .json({ success: true, msg: "Token refreshed" });
+      .cookie("refreshToken", newRefreshToken, options)
+      .json({
+        success: true,
+        msg: "Token refreshed",
+        accessToken,
+        refreshToken: newRefreshToken,
+      });
   } catch (err) {
     console.error("refreshAccessToken error:", err);
     return res.status(500).json({ success: false, msg: "Server error" });

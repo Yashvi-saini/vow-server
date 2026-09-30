@@ -12,9 +12,10 @@ export interface DecodedToken {
 
 export const verifySocketToken = async (token?: string) => {
   if (!token) throw new Error("No token provided");
+  const accessSecret = (process.env.ACCESS_TOKEN_SECRET || process.env.JWT_ACCESS_SECRET) as string;
   const decoded = jwt.verify(
     token,
-    process.env.ACCESS_TOKEN_SECRET as string
+    accessSecret
   ) as DecodedToken;
   if (!decoded?._id) throw new Error("Invalid token");
   const user = await UserModel.findById(decoded._id).select(

@@ -33,9 +33,10 @@ export const verifyJWT = asyncHandler(
       let decodedToken: DecodedToken;
 
       try {
+        const accessSecret = (process.env.ACCESS_TOKEN_SECRET || process.env.JWT_ACCESS_SECRET) as string;
         const verified = jwt.verify(
           token,
-          process.env.ACCESS_TOKEN_SECRET as string
+          accessSecret
         ) as unknown;
         decodedToken = verified as DecodedToken;
 
@@ -43,6 +44,7 @@ export const verifyJWT = asyncHandler(
           throw new ApiError(401, "Token missing user ID");
         }
       } catch (err: any) {
+        if (err instanceof ApiError) throw err;
         if (err.name === "TokenExpiredError") {
           throw new ApiError(401, "JWT expired");
         } else {
@@ -61,8 +63,9 @@ export const verifyJWT = asyncHandler(
       req.user = user;
 
       next();
-    } catch (error) {
-      throw new ApiError(401, "Invalid access token");
+    } catch (error: any) {
+      console.error("verifyJWT error:", error?.message || error);
+      throw new ApiError(401, error?.message || "Invalid access token");
     }
   }
 );

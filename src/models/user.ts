@@ -66,14 +66,16 @@ userSchema.methods.comparePassword = async function (password: string) {
 };
 userSchema.methods.generateTokens = function () {
   const user = this as IUser;
+  const accessSecret = (process.env.ACCESS_TOKEN_SECRET || process.env.JWT_ACCESS_SECRET) as string;
+  const refreshSecret = (process.env.JWT_REFRESH_SECRET || process.env.REFRESH_TOKEN_SECRET) as string;
   const accessToken = jwt.sign(
     { _id: user._id, email: user.email },
-    process.env.JWT_ACCESS_SECRET as string,
+    accessSecret,
     { expiresIn: "8h" }
   );
   const refreshToken = jwt.sign(
     { _id: user._id, email: user.email },
-    process.env.JWT_REFRESH_SECRET as string,
+    refreshSecret,
     { expiresIn: "7d" }
   );
   return { accessToken, refreshToken };
