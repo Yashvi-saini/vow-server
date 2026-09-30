@@ -19,7 +19,8 @@ jobs:
             set -e
             echo " Starting Deployment on EC2..."
             cd ~/vow-server
-            git pull origin main
+            git fetch --prune origin
+            git reset --hard origin/main
             npm install
             npm run build
             mkdir -p dist/swagger && cp -r src/swagger/* dist/swagger/
