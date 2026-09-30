@@ -4,17 +4,15 @@ import chatSocket from "./chatSocket";
 import { setupPresenceSocket } from "./presenceSocket";
 
 export const initSocket = (server: HttpServer) => {
+  const allowedOrigins = [
+    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/+$/, "") : null,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ].filter(Boolean) as string[];
+
   const io = new IOServer(server, {
   cors: {
-    origin: [
-      process.env.FRONTEND_URL as string,
-      "https://vow-org.me", 
-      "http://localhost:5173",
-      "http://127.0.0.1:3000",
-      process.env.RENDER_URL as string,
-      process.env.FRONTEND_URL_PROD as string,
-      process.env.FRONTEND_URL_DEV as string,
-    ],
+    origin: allowedOrigins,
     credentials: true,
     allowedHeaders: ["Authorization", "Content-Type"],
   },
