@@ -6,6 +6,8 @@ import { setupPresenceSocket } from "./presenceSocket";
 export const initSocket = (server: HttpServer) => {
   const allowedOrigins = [
     process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/+$/, "") : null,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
   ].filter(Boolean) as string[];
