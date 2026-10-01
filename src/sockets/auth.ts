@@ -12,9 +12,12 @@ export interface DecodedToken {
 
 export const verifySocketToken = async (token?: string) => {
   if (!token) throw new Error("No token provided");
+  let cleanToken = token.trim();
+  if (cleanToken.startsWith("Bearer ")) cleanToken = cleanToken.slice(7).trim();
+
   const accessSecret = (process.env.ACCESS_TOKEN_SECRET || process.env.JWT_ACCESS_SECRET) as string;
   const decoded = jwt.verify(
-    token,
+    cleanToken,
     accessSecret
   ) as DecodedToken;
   if (!decoded?._id) throw new Error("Invalid token");
@@ -26,15 +29,17 @@ export const verifySocketToken = async (token?: string) => {
 };
 
 export const getTokenFromSocket = (socket: Socket): string | undefined => {
-  const authToken = socket.handshake.auth?.token as string | undefined;
-  if (authToken) return authToken;
+  let authToken = socket.handshake.auth?.token as string | undefined;
+  if (authToken) {
+    let clean = authToken.trim();
+    if (clean.startsWith("Bearer ")) clean = clean.slice(7).trim();
+    return clean;
+  }
 
   const cookieHeader = socket.handshake.headers.cookie;
-  console.log('Cookie Header:', cookieHeader);
   if (!cookieHeader) return undefined;
 
   const cookies = cookie.parse(cookieHeader);
-  console.log('Cookies:', cookies);
   let token =
     cookies.accessToken ||
     cookies.Authorization ||
@@ -43,7 +48,7 @@ export const getTokenFromSocket = (socket: Socket): string | undefined => {
     undefined;
 
   if (!token) return undefined;
-  if (token.startsWith("Bearer ")) token = token.slice(7);
+  if (token.startsWith("Bearer ")) token = token.slice(7).trim();
 
   return token;
 };

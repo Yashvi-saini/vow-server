@@ -3,7 +3,6 @@ import DirectMessage from "../models/directMessage";
 import Workspace from "../models/workspace";
 import { verifySocketToken, getTokenFromSocket } from "./auth";
 
-
 export function dmSocketHandler(io: Server) {
   io.on("connection", async (socket: Socket) => {
     try {
@@ -17,19 +16,23 @@ export function dmSocketHandler(io: Server) {
       console.log(`DM socket connected: ${user.username} (${user._id})`);
 
       socket.on("join_workspace", async (workspaceId: string) => {
-        const workspace = await Workspace.findById(workspaceId);
-        if (!workspace)
-          return socket.emit("error", "Workspace not found");
+        try {
+          const workspace = await Workspace.findById(workspaceId);
+          if (!workspace)
+            return socket.emit("error", "Workspace not found");
 
-        const isMember = workspace.members
-          .map((m) => String(m))
-          .includes(String(user._id));
-        if (!isMember)
-          return socket.emit("error", "Not a member of workspace");
+          const isMember =
+            workspace.members.map((m) => String(m)).includes(String(user._id)) ||
+            String(workspace.manager) === String(user._id);
+          if (!isMember)
+            return socket.emit("error", "Not a member of workspace");
 
-        socket.join(`workspace:${workspaceId}`);
-        socket.emit("joined_workspace", workspaceId);
-        console.log(`${user.username} joined workspace ${workspaceId}`);
+          socket.join(`workspace:${workspaceId}`);
+          socket.emit("joined_workspace", workspaceId);
+          console.log(`${user.username} joined workspace ${workspaceId}`);
+        } catch (err: any) {
+          socket.emit("error", err.message || "Failed to join workspace");
+        }
       });
 
       socket.on(
@@ -43,19 +46,22 @@ export function dmSocketHandler(io: Server) {
           try {
             const { receiverId, workspaceId, content, attachments } = payload;
 
-            if (!receiverId || !workspaceId || !content)
+            if (!receiverId || !workspaceId || (!content && (!attachments || attachments.length === 0)))
               return socket.emit("error", "Missing DM data");
 
             const workspace = await Workspace.findById(workspaceId);
-            if (
-              !workspace ||
-              !workspace.members
-                .map((m) => String(m))
-                .includes(String(user._id)) ||
-              !workspace.members
-                .map((m) => String(m))
-                .includes(String(receiverId))
-            ) {
+            if (!workspace)
+              return socket.emit("error", "Workspace not found");
+
+            const isSenderMember =
+              workspace.members.map((m) => String(m)).includes(String(user._id)) ||
+              String(workspace.manager) === String(user._id);
+
+            const isReceiverMember =
+              workspace.members.map((m) => String(m)).includes(String(receiverId)) ||
+              String(workspace.manager) === String(receiverId);
+
+            if (!isSenderMember || !isReceiverMember) {
               return socket.emit("error", "Both users must belong to workspace");
             }
 
@@ -63,8 +69,8 @@ export function dmSocketHandler(io: Server) {
               sender: user._id,
               receiver: receiverId,
               workspaceId,
-              content,
-              attachments,
+              content: content || "",
+              attachments: attachments || [],
             });
 
             const populated = await DirectMessage.findById(message._id)
@@ -101,8 +107,7 @@ export function dmSocketHandler(io: Server) {
         console.log(`DM socket disconnected: ${user.username}`);
       });
     } catch (err: any) {
-      socket.emit("unauthorized", err.message);
-      socket.disconnect(true);
+      console.warn("DM socket authentication warning:", err.message);
     }
   });
 }

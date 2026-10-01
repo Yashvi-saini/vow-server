@@ -16,7 +16,10 @@ export default async function chatSocket(io: Server, socket: Socket) {
       try {
         const server = await Workspace.findById(serverId);
         if (!server) return socket.emit("error", "Server not found");
-        if (server.members.map((m) => String(m)).includes(String(user._id))) {
+        const isMember =
+          server.members.map((m) => String(m)).includes(String(user._id)) ||
+          String(server.manager) === String(user._id);
+        if (isMember) {
           socket.join(`server:${serverId}`);
           socket.emit("joined_server", serverId);
         } else {
@@ -56,8 +59,8 @@ export default async function chatSocket(io: Server, socket: Socket) {
         const message = await Message.create({
           channelId,
           sender: (socket as any).user._id,
-          content,
-          attachments,
+          content: content || "",
+          attachments: attachments || [],
         });
 
         const populated = await Message.findById(message._id).populate("sender", "username avatar");
@@ -87,8 +90,6 @@ export default async function chatSocket(io: Server, socket: Socket) {
       console.log(`Chat user disconnected: ${user._id}`);
     });
   } catch (err: any) {
-    console.error("Chat socket authentication error:", err);
-    socket.emit("unauthorized", err.message);
-    socket.disconnect(true);
+    console.warn("Chat socket authentication warning:", err.message);
   }
 }

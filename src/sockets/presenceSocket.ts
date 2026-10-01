@@ -28,7 +28,10 @@ const getWorkspaceToken = (socket: Socket) => {
 export const setupPresenceSocket = async (io: Server, socket: Socket) => {
   try {
     const ws = getWorkspaceToken(socket);
-    if (!ws) throw new Error("Workspace authentication missing");
+    if (!ws) {
+      // Not a presence connection (e.g. general chat or DM socket) - do not throw or disconnect
+      return;
+    }
 
     const { workspaceId, token } = ws;
 
@@ -43,16 +46,15 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
     console.log(`Presence: User ${userId} connected to workspace ${workspaceId}`);
 
-    // Join room
     socket.join(workspaceId);
 
-    // Send currently connected users
+    // Initial sync
     const users = await redisClient.hgetall(key);
     const parsed = Object.values(users).map((u) => JSON.parse(u));
     socket.emit("presence-sync", parsed);
 
     // JOIN
-    socket.on("join", async ({ displayName,x, y }) => {
+    socket.on("join", async ({ displayName, x, y }) => {
       const newUser = {
         userId,
         displayName: displayName || `User-${userId.slice(0, 6)}`,
@@ -63,8 +65,8 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
       await redisClient.hset(key, userId, JSON.stringify(newUser));
 
-        // Tell just this socket: "your identity is confirmed"
-  socket.emit("join-ack", { userId });
+      // Tell just this socket: "your identity is confirmed"
+      socket.emit("join-ack", { userId });
 
       // Broadcast only to this workspace
       io.to(workspaceId).emit("user-joined", newUser);
@@ -72,16 +74,16 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
 
     // MOVE
     socket.on("move", async ({ x, y }) => {
-      const existing = await redisClient.hget(key,userId);
-      const currentUser = existing?JSON.parse(existing):{};
+      const existing = await redisClient.hget(key, userId);
+      const currentUser = existing ? JSON.parse(existing) : {};
 
-       const updated = { 
-           userId,
-          displayName:currentUser.displayName,
-          x,
-          y,
-          ts:Date.now()
-          };
+      const updated = {
+        userId,
+        displayName: currentUser.displayName,
+        x,
+        y,
+        ts: Date.now(),
+      };
 
       await redisClient.hset(key, userId, JSON.stringify(updated));
 
@@ -103,8 +105,6 @@ export const setupPresenceSocket = async (io: Server, socket: Socket) => {
     });
 
   } catch (err: any) {
-    console.error("Presence socket error:", err.message);
-    socket.emit("unauthorized", err.message);
-    socket.disconnect(true);
+    console.warn("Presence socket warning:", err.message);
   }
 };
