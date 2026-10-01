@@ -82,7 +82,7 @@ export function dmSocketHandler(io: Server) {
             socket.join(dmRoom);
             io.to(`user:${receiverId}`).socketsJoin(dmRoom);
 
-            io.to(dmRoom).emit("receive_dm", populated);
+            io.to(dmRoom).to(`user:${receiverId}`).to(`user:${user._id}`).emit("receive_dm", populated);
             console.log(
               `DM ${user.username} → ${receiverId}: ${content}`
             );

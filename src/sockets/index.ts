@@ -13,18 +13,30 @@ export const initSocket = (server: HttpServer) => {
   ].filter(Boolean) as string[];
 
   const io = new IOServer(server, {
-  cors: {
-    origin: allowedOrigins,
-    credentials: true,
-    allowedHeaders: ["Authorization", "Content-Type"],
-  },
-  transports: ["websocket", "polling"],
-  allowUpgrades: true,
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  cookie: true,
-  allowEIO3: true
-});
+    cors: {
+      origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+        if (!origin) return callback(null, true);
+        const cleanOrigin = origin.replace(/\/+$/, "");
+        if (
+          allowedOrigins.includes(cleanOrigin) ||
+          cleanOrigin.endsWith(".vercel.app") ||
+          cleanOrigin.includes("localhost") ||
+          cleanOrigin.includes("127.0.0.1")
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      },
+      credentials: true,
+      allowedHeaders: ["Authorization", "Content-Type"],
+    },
+    transports: ["websocket"],
+    allowUpgrades: true,
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    cookie: true,
+    allowEIO3: true,
+  });
 
   io.on("connection", (socket) => {
     console.log("Socket user connected:", socket.id);
