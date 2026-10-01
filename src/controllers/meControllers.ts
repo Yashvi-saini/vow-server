@@ -17,6 +17,22 @@ const sanitizeUser = (userDoc: IUser) => {
   delete user.verificationCode;
   delete user.verificationCodeExpires;
   delete user.__v;
+
+  if (
+    !user.avatar ||
+    (typeof user.avatar === "string" &&
+      user.avatar.includes("amazonaws.com") &&
+      !user.avatar.includes("user-avatars"))
+  ) {
+    const defaultAvatars: Record<string, string> = {
+      male: "/avatars/male/avatar1.png",
+      female: "/avatars/female/avatar1.png",
+      other: "/avatars/other/avatar1.png",
+    };
+    const g = (user.gender || "other").toLowerCase();
+    user.avatar = defaultAvatars[g] || defaultAvatars.other;
+  }
+
   return user;
 };
 
