@@ -14,8 +14,21 @@ export class WebSocketSignalingServer {
 
   constructor(server: Server, sfuServer: SFUServer, path = '/signaling') {
     this.sfuServer = sfuServer;
-    this.wss = new ws.WebSocketServer({ server, path });
+    this.wss = new ws.WebSocketServer({ noServer: true });
     this.setupWebSocketServer();
+
+    server.on('upgrade', (req: IncomingMessage, socket: any, head: Buffer) => {
+      try {
+        const pathname = req.url ? new URL(req.url, 'http://localhost').pathname : '';
+        if (pathname.startsWith(path)) {
+          this.wss.handleUpgrade(req, socket, head, (wsSocket) => {
+            this.wss.emit('connection', wsSocket, req);
+          });
+        }
+      } catch (err) {
+        logger.error('Error handling upgrade in WebSocketSignalingServer:', err);
+      }
+    });
   }
 
   private setupWebSocketServer() {
