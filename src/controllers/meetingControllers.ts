@@ -140,19 +140,16 @@ export const getWorkspaceMeetings = async (req: Request, res: Response): Promise
       ]),
     ];
 
-    if (allWorkspaceIds.length === 0) {
-      res.status(200).json({
-        success: true,
-        message: "No meetings found. User is not part of any workspace.",
-        count: 0,
-        meetings: [],
-      });
-      return;
+    const orConditions: any[] = [];
+    if (allWorkspaceIds.length > 0) {
+      orConditions.push({ workspace: { $in: allWorkspaceIds } });
+    }
+    orConditions.push({ createdBy: userId });
+    if (user.email) {
+      orConditions.push({ attendees: user.email });
     }
 
-    const meetings = await MeetingModel.find({
-      workspace: { $in: allWorkspaceIds },
-    })
+    const meetings = await MeetingModel.find({ $or: orConditions })
       .sort({ startTime: -1 })
       .populate("createdBy", "fullName email")
       .populate("workspace", "workspaceName");
