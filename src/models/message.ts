@@ -2,11 +2,17 @@ import mongoose, { Document, Schema } from "mongoose";
 import { IUser } from "./user";
 import { IChannel } from "./channel";
 
+export interface IReaction {
+  emoji: string;
+  users: (IUser["_id"] | string)[];
+}
+
 export interface IMessage extends Document {
   channelId: IChannel["_id"];
   sender: IUser["_id"];
   content: string;
   attachments?: { url: string; filename?: string }[];
+  reactions?: IReaction[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,8 +23,15 @@ const messageSchema = new Schema<IMessage>(
     sender: { type: Schema.Types.ObjectId, ref: "User", required: true },
     content: { type: String },
     attachments: [{ url: String, filename: String }],
+    reactions: [
+      {
+        emoji: { type: String, required: true },
+        users: [{ type: Schema.Types.ObjectId, ref: "User" }],
+      },
+    ],
   },
   { timestamps: true }
 );
 
 export default mongoose.model<IMessage>("Message", messageSchema);
+

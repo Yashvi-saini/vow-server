@@ -80,6 +80,57 @@ export default async function chatSocket(io: Server, socket: Socket) {
       socket.to(`channel:${channelId}`).emit("user_stop_typing", { userId: user._id });
     });
 
+    const handleChannelReaction = async (payload: { messageId: string; channelId?: string; emoji: string }) => {
+      try {
+        const { messageId, channelId, emoji } = payload;
+        if (!messageId || !emoji) return;
+
+        const message = await Message.findById(messageId);
+        if (!message) return;
+
+        if (!message.reactions) {
+          message.reactions = [];
+        }
+
+        const userIdStr = String(user._id);
+        const reactionIndex = message.reactions.findIndex((r) => r.emoji === emoji);
+
+        if (reactionIndex > -1) {
+          const userIdx = message.reactions[reactionIndex].users.findIndex(
+            (u) => String(u) === userIdStr
+          );
+          if (userIdx > -1) {
+            // Already reacted: toggle off
+            message.reactions[reactionIndex].users.splice(userIdx, 1);
+            if (message.reactions[reactionIndex].users.length === 0) {
+              message.reactions.splice(reactionIndex, 1);
+            }
+          } else {
+            // Add user to existing emoji
+            message.reactions[reactionIndex].users.push(user._id);
+          }
+        } else {
+          // Add new emoji reaction
+          message.reactions.push({ emoji, users: [user._id] });
+        }
+
+        await message.save();
+
+        const targetChannelId = channelId || String(message.channelId);
+        io.to(`channel:${targetChannelId}`).emit("message_reaction_updated", {
+          messageId: String(message._id),
+          channelId: targetChannelId,
+          reactions: message.reactions,
+        });
+      } catch (err: any) {
+        socket.emit("error", err.message || "Failed to update reaction");
+      }
+    };
+
+    socket.on("react_message", handleChannelReaction);
+    socket.on("message_reaction", handleChannelReaction);
+
+
     // leave channel
     socket.on("leave_channel", (channelId: string) => {
       socket.leave(`channel:${channelId}`);

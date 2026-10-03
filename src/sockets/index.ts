@@ -1,6 +1,7 @@
 import { Server as HttpServer } from "http";
 import { Server as IOServer, Socket } from "socket.io";
 import chatSocket from "./chatSocket";
+import dmSocket from "./dmSocket";
 import { setupPresenceSocket } from "./presenceSocket";
 
 export const initSocket = (server: HttpServer) => {
@@ -31,6 +32,7 @@ export const initSocket = (server: HttpServer) => {
     
     // Initialize socket modules
     chatSocket(io, socket);
+    dmSocket(io, socket);
     setupPresenceSocket(io, socket);
 
     socket.on("disconnect", (reason) => {
