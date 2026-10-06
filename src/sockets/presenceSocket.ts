@@ -1,110 +1,151 @@
 import { Server, Socket } from "socket.io";
+import Workspace from "../models/workspace";
 import { getRedis } from "../libs/redis";
-import jwt from "jsonwebtoken";
+import { getTokenFromSocket, verifySocketToken } from "./auth";
+import { getGlobalOnlineUsers } from "./presenceTracker";
 
 const redisClient = getRedis();
 
-const getWorkspaceToken = (socket: Socket) => {
-  const raw = socket.handshake.headers.cookie;
-  if (!raw) return null;
+const presenceKey = (workspaceId: string) => `presence:workspace:${workspaceId}`;
+const mapRoom = (workspaceId: string) => `map:${workspaceId}`;
 
-  const cookies = Object.fromEntries(
-    raw.split(";").map((c) => c.trim().split("="))
-  );
-
-  // cookie: workspaceToken_<workspaceId>
-  const wsCookie = Object.keys(cookies).find((k) =>
-    k.startsWith("workspaceToken_")
-  );
-
-  if (!wsCookie) return null;
-
-  return {
-    workspaceId: wsCookie.replace("workspaceToken_", ""),
-    token: cookies[wsCookie],
-  };
+const clamp = (n: any, fallback: number) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(0, Math.min(100, v));
 };
 
-export const setupPresenceSocket = async (io: Server, socket: Socket) => {
-  try {
-    const ws = getWorkspaceToken(socket);
-    if (!ws) {
-      // Not a presence connection (e.g. general chat or DM socket) - do not throw or disconnect
-      return;
+const resolveUser = async (socket: Socket) => {
+  const existing = (socket as any).user;
+  if (existing?._id) return existing;
+  const token =
+    getTokenFromSocket(socket) || (socket.handshake.auth as any)?.token;
+  if (!token) return null;
+  const user = await verifySocketToken(token);
+  (socket as any).user = user;
+  return user;
+};
+
+// Everyone currently on the map of a workspace. Entries whose user has no live
+// socket any more (e.g. left over from a server restart) are dropped.
+const getMapUsers = async (workspaceId: string) => {
+  const key = presenceKey(workspaceId);
+  const raw = await redisClient.hgetall(key);
+  const online = new Set(getGlobalOnlineUsers());
+  const users: any[] = [];
+  for (const [userId, value] of Object.entries(raw)) {
+    if (!online.has(userId)) {
+      await redisClient.hdel(key, userId);
+      continue;
     }
-
-    const { workspaceId, token } = ws;
-
-    const decoded: any = jwt.verify(
-      token,
-      process.env.WORKSPACE_JWT_SECRET!
-    );
-
-    const userId = decoded.userId;
-
-    const key = `presence:workspace:${workspaceId}`;
-
-    console.log(`Presence: User ${userId} connected to workspace ${workspaceId}`);
-
-    socket.join(workspaceId);
-
-    // Initial sync
-    const users = await redisClient.hgetall(key);
-    const parsed = Object.values(users).map((u) => JSON.parse(u));
-    socket.emit("presence-sync", parsed);
-
-    // JOIN
-    socket.on("join", async ({ displayName, x, y }) => {
-      const newUser = {
-        userId,
-        displayName: displayName || `User-${userId.slice(0, 6)}`,
-        x: x || 50,
-        y: y || 50,
-        ts: Date.now(),
-      };
-
-      await redisClient.hset(key, userId, JSON.stringify(newUser));
-
-      // Tell just this socket: "your identity is confirmed"
-      socket.emit("join-ack", { userId });
-
-      // Broadcast only to this workspace
-      io.to(workspaceId).emit("user-joined", newUser);
-    });
-
-    // MOVE
-    socket.on("move", async ({ x, y }) => {
-      const existing = await redisClient.hget(key, userId);
-      const currentUser = existing ? JSON.parse(existing) : {};
-
-      const updated = {
-        userId,
-        displayName: currentUser.displayName,
-        x,
-        y,
-        ts: Date.now(),
-      };
-
-      await redisClient.hset(key, userId, JSON.stringify(updated));
-
-      io.to(workspaceId).emit("user-moved", updated);
-    });
-
-    // LEAVE
-    socket.on("leave", async () => {
+    try {
+      users.push(JSON.parse(value));
+    } catch {
       await redisClient.hdel(key, userId);
-      io.to(workspaceId).emit("user-left", { userId });
-    });
-
-    // DISCONNECT
-    socket.on("disconnect", async () => {
-      await redisClient.hdel(key, userId);
-      io.to(workspaceId).emit("user-left", { userId });
-
-      console.log(`Presence: User ${userId} disconnected from workspace ${workspaceId}`);
-    });
-
-  } catch (err: any) {
-    console.warn("Presence socket warning:", err.message);
+    }
   }
+  return users;
+};
+
+export const setupPresenceSocket = (io: Server, socket: Socket) => {
+  // Listeners are registered synchronously so an early "join" is never missed.
+  let mapWorkspaceId: string | null = null;
+  let mapUser: any = null;
+
+  const leaveMap = async () => {
+    if (!mapWorkspaceId || !mapUser) return;
+    const workspaceId = mapWorkspaceId;
+    const userId = mapUser.userId;
+    mapWorkspaceId = null;
+    mapUser = null;
+    socket.leave(mapRoom(workspaceId));
+
+    // The same user may still be on the map from another tab/device
+    const peers = await io.in(mapRoom(workspaceId)).fetchSockets();
+    const stillThere = peers.some((s) => s.data?.mapUserId === userId);
+    socket.data.mapUserId = undefined;
+    if (!stillThere) {
+      await redisClient.hdel(presenceKey(workspaceId), userId);
+      io.to(mapRoom(workspaceId)).emit("user-left", { userId });
+    }
+  };
+
+  const sendSync = async () => {
+    if (!mapWorkspaceId) return;
+    const users = await getMapUsers(mapWorkspaceId);
+    socket.emit("presence-sync", users);
+  };
+
+  socket.on("join", async (payload: any = {}) => {
+    try {
+      const user = await resolveUser(socket);
+      const workspaceId = String(payload.workspaceId || "");
+      if (!user || !workspaceId) return;
+
+      const workspace = await Workspace.findById(workspaceId);
+      if (!workspace) return socket.emit("error", "Workspace not found");
+      const userId = String(user._id);
+      const isMember =
+        workspace.members.map((m: any) => String(m)).includes(userId) ||
+        String(workspace.manager) === userId;
+      if (!isMember) return socket.emit("error", "Not a member of workspace");
+
+      if (mapWorkspaceId && mapWorkspaceId !== workspaceId) await leaveMap();
+
+      mapWorkspaceId = workspaceId;
+      socket.data.mapUserId = userId;
+      mapUser = {
+        userId,
+        displayName:
+          payload.displayName || user.fullName || user.username || `User-${userId.slice(0, 6)}`,
+        avatar: payload.avatar || user.avatar || "",
+        x: clamp(payload.x, 60),
+        y: clamp(payload.y, 60),
+        ts: Date.now(),
+      };
+
+      socket.join(mapRoom(workspaceId));
+      await redisClient.hset(presenceKey(workspaceId), userId, JSON.stringify(mapUser));
+
+      socket.emit("join-ack", { userId });
+      await sendSync();
+      socket.to(mapRoom(workspaceId)).emit("user-joined", mapUser);
+    } catch (err: any) {
+      console.warn("Map presence join error:", err.message);
+    }
+  });
+
+  socket.on("get_map_presence", () => {
+    sendSync().catch((e) => console.warn("Map presence sync error:", e.message));
+  });
+
+  socket.on("move", async (payload: any = {}) => {
+    if (!mapWorkspaceId || !mapUser) return;
+    try {
+      mapUser = {
+        ...mapUser,
+        displayName: payload.displayName || mapUser.displayName,
+        avatar: payload.avatar || mapUser.avatar,
+        x: clamp(payload.x, mapUser.x),
+        y: clamp(payload.y, mapUser.y),
+        ts: Date.now(),
+      };
+      await redisClient.hset(
+        presenceKey(mapWorkspaceId),
+        mapUser.userId,
+        JSON.stringify(mapUser)
+      );
+      socket.to(mapRoom(mapWorkspaceId)).emit("user-moved", mapUser);
+    } catch (err: any) {
+      console.warn("Map presence move error:", err.message);
+    }
+  });
+
+  socket.on("leave", () => {
+    leaveMap().catch((e) => console.warn("Map presence leave error:", e.message));
+  });
+
+  socket.on("disconnect", () => {
+    leaveMap().catch((e) => console.warn("Map presence disconnect error:", e.message));
+  });
 };
