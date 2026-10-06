@@ -3,6 +3,12 @@ import { Server as IOServer, Socket } from "socket.io";
 import chatSocket from "./chatSocket";
 import dmSocket from "./dmSocket";
 import { setupPresenceSocket } from "./presenceSocket";
+import { getTokenFromSocket, verifySocketToken } from "./auth";
+import {
+  trackUserConnection,
+  trackUserDisconnect,
+  setupPresenceTracker,
+} from "./presenceTracker";
 
 export const initSocket = (server: HttpServer) => {
   const allowedOrigins = [
@@ -27,9 +33,25 @@ export const initSocket = (server: HttpServer) => {
   allowEIO3: true
 });
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     console.log("Socket user connected:", socket.id);
-    
+
+    try {
+      const token =
+        getTokenFromSocket(socket) ||
+        (socket.handshake.auth && (socket.handshake.auth as any).token);
+      if (token) {
+        const user = await verifySocketToken(token);
+        (socket as any).user = user;
+        trackUserConnection(io, socket, String(user._id));
+      }
+    } catch (e: any) {
+      console.warn("Socket user auth warning on connection:", e.message);
+    }
+
+    // Set up presence tracker listeners
+    setupPresenceTracker(io, socket);
+
     // Initialize socket modules
     chatSocket(io, socket);
     dmSocket(io, socket);
@@ -37,6 +59,7 @@ export const initSocket = (server: HttpServer) => {
 
     socket.on("disconnect", (reason) => {
       console.log("Socket user disconnected:", socket.id, "Reason:", reason);
+      trackUserDisconnect(io, socket);
     });
 
     // Optional: handle individual socket errors
@@ -45,7 +68,7 @@ export const initSocket = (server: HttpServer) => {
     });
   });
 
-  console.log("Socket.IO initialized with chat and presence modules");
+  console.log("Socket.IO initialized with chat, dm, and presence tracking modules");
 
   return io;
-};
+};

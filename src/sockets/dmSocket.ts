@@ -2,6 +2,11 @@ import { Server, Socket } from "socket.io";
 import DirectMessage from "../models/directMessage";
 import Workspace from "../models/workspace";
 import { verifySocketToken, getTokenFromSocket } from "./auth";
+import {
+  trackUserConnection,
+  trackUserWorkspaceJoin,
+  trackUserWorkspaceLeave,
+} from "./presenceTracker";
 
 export default async function dmSocket(io: Server, socket: Socket) {
   try {
@@ -12,6 +17,7 @@ export default async function dmSocket(io: Server, socket: Socket) {
     const user = (await verifySocketToken(token)) as any;
     (socket as any).user = user;
     socket.join(`user:${user._id}`);
+    trackUserConnection(io, socket, String(user._id));
     console.log(`DM socket connected: ${user.username} (${user._id})`);
 
     socket.on("join_workspace", async (workspaceId: string) => {
@@ -27,10 +33,21 @@ export default async function dmSocket(io: Server, socket: Socket) {
           return socket.emit("error", "Not a member of workspace");
 
         socket.join(`workspace:${workspaceId}`);
+        trackUserWorkspaceJoin(io, socket, String(user._id), workspaceId);
         socket.emit("joined_workspace", workspaceId);
         console.log(`${user.username} joined workspace ${workspaceId}`);
       } catch (err: any) {
         socket.emit("error", err.message || "Failed to join workspace");
+      }
+    });
+
+    socket.on("leave_workspace", (workspaceId: string) => {
+      try {
+        socket.leave(`workspace:${workspaceId}`);
+        trackUserWorkspaceLeave(io, socket, String(user._id), workspaceId);
+        socket.emit("left_workspace", workspaceId);
+      } catch (err: any) {
+        console.warn("leave_workspace error:", err.message);
       }
     });
 
