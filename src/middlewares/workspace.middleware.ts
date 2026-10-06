@@ -1,6 +1,8 @@
 import { Request,Response,NextFunction, CookieOptions } from "express";
 import { ApiError } from "../utils/ApiError";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import Workspace from "../models/workspace";
+import { verifyJWT } from "./authmiddleware";
 
  export const generateWorkspaceToken = (workspaceId: string, userId: string) => {
   return jwt.sign(
@@ -56,4 +58,45 @@ export const verifyWorkspaceToken = (
   } catch (err) {
     next(new ApiError(401, "Invalid or expired workspace token"));
   }
+};
+
+export const verifyWorkspaceAccess = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const { workspaceId } = req.params;
+  const token = workspaceId ? req.cookies?.[`workspaceToken_${workspaceId}`] : null;
+
+  if (token) {
+    try {
+      req.workspaceUser = jwt.verify(
+        token,
+        process.env.WORKSPACE_JWT_SECRET!
+      ) as WorkspaceJwtPayload;
+      return next();
+    } catch {
+    }
+  }
+
+  verifyJWT(req, res, async (err?: any) => {
+    if (err) return next(err);
+    try {
+      const userId = String(req.user?._id);
+      const workspace = workspaceId ? await Workspace.findById(workspaceId) : null;
+      if (!workspace) return next(new ApiError(404, "Workspace not found"));
+
+      const isMember =
+        workspace.members.some((m) => String(m) === userId) ||
+        String(workspace.manager) === userId;
+      if (!isMember) return next(new ApiError(403, "Not a member of this workspace"));
+
+      const fresh = generateWorkspaceToken(String(workspace._id), userId);
+      res.cookie(`workspaceToken_${workspaceId}`, fresh, workspaceCookieOptions);
+      req.workspaceUser = { workspaceId: String(workspace._id), userId } as WorkspaceJwtPayload;
+      next();
+    } catch (e) {
+      next(e);
+    }
+  });
 };

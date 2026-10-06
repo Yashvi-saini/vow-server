@@ -11,46 +11,52 @@ import { options}  from "../constant"
 export const createWorkspace = async (req: Request, res: Response) : Promise<void> => {
   try {
     const userID = req.user?._id as Types.ObjectId ;
-    if (!userID) throw new Error("Unauthorized");
+    if (!userID) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
 
-    const { workspaceName , inviteEmails } = req.body;
-    const inviteCode = generateInviteCode();
+    const workspaceName = String(req.body.workspaceName || "").trim();
+    const inviteEmails: string[] = Array.isArray(req.body.inviteEmails) ? req.body.inviteEmails : [];
+    if (!workspaceName) {
+      res.status(400).json({ success: false, message: "Workspace name is required" });
+      return;
+    }
+
+    const inviterName =
+      req.user?.fullName || req.user?.username || req.user?.email?.split("@")[0] || "A VOW user";
 
     const workspace = new Workspace({
       workspaceName,
-      inviterName: req.user?.fullName,
+      inviterName,
       manager: userID,
       members: [userID],
-      inviteCode
+      inviteCode: generateInviteCode(),
     });
+    await workspace.save();
 
-await workspace.save();
-
- const workspaceIdStr = (workspace._id as Types.ObjectId).toString();
+    const workspaceIdStr = (workspace._id as Types.ObjectId).toString();
     const workspaceToken = generateWorkspaceToken(workspaceIdStr, userID.toString());
+    res.cookie(`workspaceToken_${workspaceIdStr}`, workspaceToken, workspaceCookieOptions);
 
-    const cookieName = `workspaceToken_${workspaceIdStr}`;
-    res.cookie(cookieName, workspaceToken, workspaceCookieOptions );
-      
-
-    res.status(200).json({
+    res.status(201).json({
       success: true,
-      message: "Joined workspace successfully",
-      workspace,
-    });
-
-if (inviteEmails && inviteEmails.length > 0) {
-      for (const email of inviteEmails) {
-       await sendInviteEmail(email, workspace.inviterName, workspace.workspaceName, workspace.inviteCode);
-      }
-    }
-
-res.status(201).json({
       message: "Workspace created successfully",
       workspace,
     });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+
+    for (const email of inviteEmails) {
+      try {
+        await sendInviteEmail(email, workspace.inviterName, workspace.workspaceName, workspace.inviteCode);
+      } catch (mailErr: any) {
+        console.error("Invite email failed:", email, mailErr?.message);
+      }
+    }
+  } catch (error: any) {
+    console.error("Create workspace error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: "Server error", error: error?.message });
+    }
   }
 };
 

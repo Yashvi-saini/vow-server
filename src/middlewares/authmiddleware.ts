@@ -20,7 +20,6 @@ interface DecodedToken extends JwtPayload {
 export const verifyJWT = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      console.log("I have been hitted");
 
       const token =
         req.cookies?.accessToken ||
