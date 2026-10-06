@@ -34,7 +34,6 @@ export const initSocket = (server: HttpServer) => {
 });
 
   io.on("connection", async (socket) => {
-    console.log("Socket user connected:", socket.id);
 
     try {
       const token =
@@ -58,7 +57,6 @@ export const initSocket = (server: HttpServer) => {
     setupPresenceSocket(io, socket);
 
     socket.on("disconnect", (reason) => {
-      console.log("Socket user disconnected:", socket.id, "Reason:", reason);
       trackUserDisconnect(io, socket);
     });
 
@@ -68,7 +66,6 @@ export const initSocket = (server: HttpServer) => {
     });
   });
 
-  console.log("Socket.IO initialized with chat, dm, and presence tracking modules");
 
   return io;
 };

@@ -18,7 +18,6 @@ export default async function dmSocket(io: Server, socket: Socket) {
     (socket as any).user = user;
     socket.join(`user:${user._id}`);
     trackUserConnection(io, socket, String(user._id));
-    console.log(`DM socket connected: ${user.username} (${user._id})`);
 
     socket.on("join_workspace", async (workspaceId: string) => {
       try {
@@ -35,7 +34,6 @@ export default async function dmSocket(io: Server, socket: Socket) {
         socket.join(`workspace:${workspaceId}`);
         trackUserWorkspaceJoin(io, socket, String(user._id), workspaceId);
         socket.emit("joined_workspace", workspaceId);
-        console.log(`${user.username} joined workspace ${workspaceId}`);
       } catch (err: any) {
         socket.emit("error", err.message || "Failed to join workspace");
       }
@@ -103,9 +101,6 @@ export default async function dmSocket(io: Server, socket: Socket) {
             .to(`user:${user._id}`)
             .emit("receive_dm", populated);
 
-          console.log(
-            `DM ${user.username} → ${receiverId}: ${content}`
-          );
         } catch (err: any) {
           socket.emit("error", err.message || "Send DM failed");
         }
@@ -182,18 +177,12 @@ export default async function dmSocket(io: Server, socket: Socket) {
     });
 
     socket.on("disconnect", () => {
-      console.log(`DM socket disconnected: ${user.username}`);
     });
   } catch (err: any) {
     console.warn("DM socket authentication warning:", err.message);
   }
 }
 
-export function dmSocketHandler(io: Server) {
-  io.on("connection", (socket: Socket) => {
-    dmSocket(io, socket);
-  });
-}
 
 function getDMRoomId(userA: string, userB: string): string {
   return `dm:${[userA, userB].sort().join(":")}`;

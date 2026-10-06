@@ -55,7 +55,6 @@ export const trackUserConnection = (
   existingSockets.add(socket.id);
 
   if (isFirstSocket) {
-    console.log(`[presence] User online globally: ${cleanUserId}`);
     io.emit("user_online", { userId: cleanUserId });
   }
 };
@@ -90,7 +89,6 @@ export const trackUserWorkspaceJoin = (
   socket.join(`workspace:${cleanWsId}`);
 
   if (isFirstInWorkspace) {
-    console.log(`[presence] User ${cleanUserId} joined workspace ${cleanWsId}`);
     // Broadcast to the workspace room
     io.to(`workspace:${cleanWsId}`).emit("user_online", {
       userId: cleanUserId,
@@ -135,7 +133,6 @@ export const trackUserWorkspaceLeave = (
 
     if (!stillActiveInWs || userWsSockets.size === 0) {
       wsMap.delete(cleanUserId);
-      console.log(`[presence] User ${cleanUserId} left workspace ${cleanWsId}`);
       io.to(`workspace:${cleanWsId}`).emit("user_offline", {
         userId: cleanUserId,
         workspaceId: cleanWsId,
@@ -166,7 +163,6 @@ export const trackUserDisconnect = (io: Server, socket: Socket) => {
     sockets.delete(socket.id);
     if (sockets.size === 0) {
       userSockets.delete(userId);
-      console.log(`[presence] User offline globally: ${userId}`);
       io.emit("user_offline", { userId });
     }
   }

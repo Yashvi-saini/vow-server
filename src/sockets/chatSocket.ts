@@ -138,7 +138,6 @@ export default async function chatSocket(io: Server, socket: Socket) {
     });
 
     socket.on("disconnect", () => {
-      console.log(`Chat user disconnected: ${user._id}`);
     });
   } catch (err: any) {
     console.warn("Chat socket authentication warning:", err.message);
