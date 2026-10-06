@@ -24,6 +24,7 @@ import workspaceRouter from "./routes/workspaceRoute";
 import managerRouter from "./routes/managerRoutes";
 import superviserRouter from "./routes/superviserRoute";
 
+import { dmSocketHandler } from "./sockets/dmSocket";
 import channelRoutes from "./routes/channelRoutes";
 import messageRoutes from "./routes/messageRoutes";
 import mapRoutes from "./routes/mapRoutes";
@@ -159,6 +160,7 @@ mongoDb()
   .then(async () => {
     const server = http.createServer(app);
     const io = initSocket(server);
+    dmSocketHandler(io);
 
     let videochatHandle: { shutdown?: () => Promise<void> } | undefined;
     try {

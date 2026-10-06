@@ -81,7 +81,10 @@ export default async function dmSocket(io: Server, socket: Socket) {
           socket.join(dmRoom);
           io.to(`user:${receiverId}`).socketsJoin(dmRoom);
 
-          io.to(dmRoom).emit("receive_dm", populated);
+          io.to(dmRoom)
+            .to(`user:${receiverId}`)
+            .to(`user:${user._id}`)
+            .emit("receive_dm", populated);
 
           console.log(
             `DM ${user.username} → ${receiverId}: ${content}`

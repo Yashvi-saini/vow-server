@@ -21,16 +21,12 @@ const sanitizeUser = (userDoc: IUser) => {
   if (
     !user.avatar ||
     (typeof user.avatar === "string" &&
-      user.avatar.includes("amazonaws.com") &&
-      !user.avatar.includes("user-avatars"))
+      (user.avatar.includes("avatar1") ||
+       user.avatar.startsWith("/avatars/") ||
+       (user.avatar.includes("amazonaws.com") && !user.avatar.includes("user-avatars"))))
   ) {
-    const defaultAvatars: Record<string, string> = {
-      male: "/avatars/male/avatar1.png",
-      female: "/avatars/female/avatar1.png",
-      other: "/avatars/other/avatar1.png",
-    };
-    const g = (user.gender || "other").toLowerCase();
-    user.avatar = defaultAvatars[g] || defaultAvatars.other;
+    const seed = encodeURIComponent(user.username || (user._id ? user._id.toString() : "user"));
+    user.avatar = `https://api.dicebear.com/9.x/adventurer/svg?seed=${seed}`;
   }
 
   return user;
@@ -42,15 +38,9 @@ const sanitizeUser = (userDoc: IUser) => {
     if (!userId) throw new ApiError(401, "Unauthorized");
 
     const { fullName, organisation, gender, dob } = req.body;
-
-    const defaultAvatars: Record<string, string> = {
-      male: "/avatars/male/avatar1.png",
-      female: "/avatars/female/avatar1.png",
-      other: "/avatars/other/avatar1.png",
-    };
-
     const genderKey = gender?.toLowerCase() || "other";
-    const avatarUrl = defaultAvatars[genderKey] || defaultAvatars.other;
+    const seed = encodeURIComponent(req.user?.username || String(userId));
+    const avatarUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${seed}`;
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
