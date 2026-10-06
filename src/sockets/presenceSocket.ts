@@ -26,8 +26,6 @@ const resolveUser = async (socket: Socket) => {
   return user;
 };
 
-// Everyone currently on the map of a workspace. Entries whose user has no live
-// socket any more (e.g. left over from a server restart) are dropped.
 const getMapUsers = async (workspaceId: string) => {
   const key = presenceKey(workspaceId);
   const raw = await redisClient.hgetall(key);
@@ -48,7 +46,6 @@ const getMapUsers = async (workspaceId: string) => {
 };
 
 export const setupPresenceSocket = (io: Server, socket: Socket) => {
-  // Listeners are registered synchronously so an early "join" is never missed.
   let mapWorkspaceId: string | null = null;
   let mapUser: any = null;
 
@@ -60,7 +57,6 @@ export const setupPresenceSocket = (io: Server, socket: Socket) => {
     mapUser = null;
     socket.leave(mapRoom(workspaceId));
 
-    // The same user may still be on the map from another tab/device
     const peers = await io.in(mapRoom(workspaceId)).fetchSockets();
     const stillThere = peers.some((s) => s.data?.mapUserId === userId);
     socket.data.mapUserId = undefined;
